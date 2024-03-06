@@ -2,26 +2,27 @@ use core::fmt;
 
 //use bevyworld_lib::map_generators;
 
-use bevy::{
-    core::Zeroable, diagnostic::LogDiagnosticsPlugin, prelude::*
+use bevy::{core::Zeroable, diagnostic::LogDiagnosticsPlugin, prelude::*};
+use bevy_egui::{
+    egui::{self},
+    EguiContexts, EguiPlugin,
 };
-use bevy_egui::{egui::{self}, EguiContexts, EguiPlugin};
 
 fn main() {
     App::new()
-    .add_plugins((DefaultPlugins, LogDiagnosticsPlugin::default()))
-    .insert_resource::<UiState>(UiState::new())
-    .add_plugins(EguiPlugin)
-    .add_systems(Update, ui_example_system)
-    .add_systems(Startup, setup)
-    .run();
+        .add_plugins((DefaultPlugins, LogDiagnosticsPlugin::default()))
+        .insert_resource::<UiState>(UiState::new())
+        .add_plugins(EguiPlugin)
+        .add_systems(Update, ui_example_system)
+        .add_systems(Startup, setup)
+        .run();
 }
 
 #[derive(PartialEq, Debug, Default)]
 enum MapGeneratorStrategies {
     #[default]
     WaveFunctionCollapse,
-    PerlinNoise
+    PerlinNoise,
 }
 
 impl fmt::Display for MapGeneratorStrategies {
@@ -52,9 +53,17 @@ fn ui_example_system(mut ui_state: ResMut<UiState>, mut contexts: EguiContexts) 
         egui::ComboBox::from_label("map generator strategies")
             .selected_text(format!("{}", ui_state.map_generator))
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut ui_state.map_generator, MapGeneratorStrategies::WaveFunctionCollapse, "Wave Function Collapse");
-                ui.selectable_value(&mut ui_state.map_generator, MapGeneratorStrategies::PerlinNoise, "Perlin Noise");
-        });
+                ui.selectable_value(
+                    &mut ui_state.map_generator,
+                    MapGeneratorStrategies::WaveFunctionCollapse,
+                    "Wave Function Collapse",
+                );
+                ui.selectable_value(
+                    &mut ui_state.map_generator,
+                    MapGeneratorStrategies::PerlinNoise,
+                    "Perlin Noise",
+                );
+            });
     });
 }
 
@@ -73,7 +82,7 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
         for x in -half_x..half_x {
             let position = Vec2::new(x as f32, y as f32);
             let translation = (position * tile_size).extend(0.0);
-            let rotation  = Quat::zeroed();
+            let rotation = Quat::zeroed();
             let scale = Vec3::new(1.0, 1.0, 1.0);
 
             sprites.push(SpriteBundle {
@@ -88,10 +97,9 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
                     color: Color::WHITE,
                     ..default()
                 },
-            ..default()
+                ..default()
             });
         }
     }
     commands.spawn_batch(sprites);
-
 }
