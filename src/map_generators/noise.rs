@@ -1,4 +1,4 @@
-use simdnoise::*;
+/*use simdnoise::*;
 use bevy::prelude::*;
 use crate::tile_types::TileType;
 
@@ -11,3 +11,4 @@ pub fn noise_map(map_size: Vec2d, seed: i32) -> Mat2 {
 
     matrix::Conventional::from_vec((map_size.x, map_size.y), noise);
 }
+*/
