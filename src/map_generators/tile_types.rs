@@ -1,15 +1,19 @@
-enum TileType {
-    Water,
-    Coast,
+#[derive(Debug, PartialEq, Clone)]
+pub enum TileType {
     Grassland,
-    ThickForest,
-    LightForest,
-    Desert,
-    Ice,
+    Water,
+    //Coast,
+    //ThickForest,
+    //LightForest,
+    //Desert,
+    //Ice,
 }
 
-impl matrix::prelude::Element for TileType {
-    fn zero() -> TileType {
-        TileType::Water
+impl TileType {
+    pub fn to_atlas_index(&self) -> u32 {
+        match self {
+            Self::Grassland => 0,
+            Self::Water => 1,
+        }
     }
 }
