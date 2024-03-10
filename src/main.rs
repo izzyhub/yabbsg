@@ -36,7 +36,7 @@ fn main() {
         .insert_resource::<UiState>(UiState::new())
         .add_plugins(EguiPlugin)
         .add_plugins(DebugPlugin)
-        .add_plugins(FastTileMapPlugin::default())
+        .add_plugins(FastTileMapPlugin)
         .add_systems(Update, ui_example_system)
         .add_systems(Startup, setup)
         .run();
@@ -64,7 +64,7 @@ fn ui_example_system(
     maps: Query<&Handle<Map>>,
 ) {
     //let window = egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
-    let _ = egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
+    let _ = egui::Window::new("Map Generation").show(contexts.ctx_mut(), |ui| {
         ui.add(egui::TextEdit::singleline(&mut ui_state.seed));
         //println!("response {:?}", response);
         if ui.add(egui::Button::new("Regenerate Map")).clicked() {
@@ -135,6 +135,7 @@ fn gen_noise_map(params: MapGenParams, map: &mut MapIndexer) {
             map.set(x, y, tile_index);
         }
     }
+  println!("map generation finished");
 }
 
 fn setup(
@@ -144,7 +145,7 @@ fn setup(
     mut materials: ResMut<Assets<Map>>,
 ) {
     let map_square = 1280;
-    let map_size = Vec2::splat(2560.0 as f32);
+    let map_size = Vec2::splat(2560.0);
     let tile_size = Vec2::splat(128.0);
 
     let texture = assets.load("tiles/multitiles.png");
