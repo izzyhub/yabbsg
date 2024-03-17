@@ -3,6 +3,7 @@
 use crate::map_generators::tile::Tile;
 use crate::map_generators::tile_types::TileType;
 use crate::math_helpers::*;
+use bevy::ecs::query::Has;
 //use bevy::log::tracing_subscriber::filter::targets::Iter;
 //use bevy_inspector_egui::egui::was_tooltip_open_last_frame;
 use nalgebra::DMatrix;
@@ -30,6 +31,116 @@ fn closest_cell(point: &Point, diagram: &Voronoi) -> usize {
     }
 
     closest_cell.site()
+}
+
+struct ContinentOptions {
+    total_area: usize,
+    land_area_percentage: f64,
+    num_continents: usize,
+}
+
+impl ContinentOptions {
+    fn new(total_area: usize, land_area_percentage: f64, num_continents: usize) -> ContinentOptions {
+        ContinentOptions {
+            total_area,
+            land_area_percentage,
+            num_continents,
+        }
+    }
+}
+
+pub struct Continents {
+    pub all_continent_cells: HashSet<usize>,
+    pub continents: Vec<HashSet<usize>>,
+}
+impl Continents {
+    fn new(all_continent_cells: HashSet<usize>, continents: Vec<HashSet<usize>>) -> Continents {
+        Continents {
+            all_continent_cells,
+            continents,
+        }
+    }
+}
+
+fn make_continent_cells(diagram: &Voronoi, options: &ContinentOptions, rng: &mut Pcg64) -> Continents {
+        let initial_continent_cells = diagram
+        .iter_cells()
+        .map(|cell| cell.site())
+        .choose_multiple(rng, options.num_continents);
+
+    let mut used_cells: HashSet<usize> = initial_continent_cells.into_iter().collect();
+
+    let mut continents: Vec<HashSet<usize>> = used_cells
+        .iter()
+        .map(|cell| HashSet::from([cell.clone()]))
+        .collect();
+
+    // we want to iterate over the segments until we assign enough of them to be land to be roughly earth analogous
+    let mut land_area: f64 = continents
+        .iter()
+        .map(|continent_cells| {
+            continent_cells
+                .iter()
+                .map(|cell_index| shoelace_area_of_cell(diagram.cell(*cell_index)))
+                .sum::<f64>()
+        })
+        .sum();
+
+    let mut land_area_percentage: f64 = (land_area / options.total_area as f64) * 100.0;
+
+    println!("total area: {}", options.total_area);
+    println!("initial land area: {land_area}");
+    println!("initial land area percentage: {land_area_percentage}");
+
+    while land_area_percentage <= options.land_area_percentage {
+        println!("total area: {}", options.total_area);
+        println!("land area: {land_area}");
+        println!("land area precentage: {land_area_percentage}");
+        let continent_cell_set = continents.choose_mut(rng);
+        match continent_cell_set {
+            Some(cell_set) => {
+                let cell_index = cell_set.iter().choose(rng);
+                match cell_index {
+                    Some(index) => {
+                        println!("index: {index}");
+                        let cell = diagram.cell(*index);
+                        let mut neighbors: Vec<usize> = cell.iter_neighbors().collect();
+                        println!("neighbors: {neighbors:?}");
+                        neighbors.shuffle(rng);
+                        println!("neighbors: {neighbors:?}");
+                        println!("used_cells: {used_cells:?}");
+
+                        for neighbor in neighbors {
+                            println!("neighbor: {neighbor}");
+                            if !used_cells.contains(&neighbor) {
+                                println!("adding neighbor to continents");
+                                used_cells.insert(neighbor);
+                                println!("used_cells: {used_cells:?}");
+                                cell_set.insert(neighbor);
+                                let cell_area =
+                                    shoelace_area_of_cell(diagram.cell(neighbor));
+                                println!("neighbor area: {cell_area}");
+                                land_area += cell_area;
+                                println!("new land area: {land_area}");
+                                land_area_percentage = (land_area / options.total_area as f64) * 100.0;
+                                println!("new land area percentage: {land_area_percentage}");
+                                break;
+                            }
+                        }
+                    }
+                    None => {
+                        println!("somehow we got an empty continent cell")
+                    }
+                }
+            }
+            None => {
+                println!("somehow we got an empty continent set")
+            }
+        }
+    }
+
+    Continents::new(used_cells, continents)
+
 }
 
 pub fn voronoi_continents(
@@ -88,82 +199,11 @@ pub fn voronoi_continents(
     //let ideal_land_area_percentage_lower_bound = 2.0;
     let num_continents: usize = rng.gen_range(4..=9);
 
+    let options = ContinentOptions::new(total_area, ideal_land_area_percentage_lower_bound, num_continents);
+    let continents = make_continent_cells(&voronoi_diagram, &options, &mut rng);
+
     println!("generated continents");
-    let initial_continent_cells = voronoi_diagram
-        .iter_cells()
-        .map(|cell| cell.site())
-        .choose_multiple(&mut rng, num_continents);
-    let mut used_cells: HashSet<usize> = initial_continent_cells.into_iter().collect();
-    println!("initial_continents: {used_cells:?}");
 
-    let mut continents: Vec<HashSet<usize>> = used_cells
-        .iter()
-        .map(|cell| HashSet::from([cell.clone()]))
-        .collect();
-    // we want to iterate over the segments until we assign enough of them to be land to be roughly earth analogous
-
-    let mut land_area: f64 = continents
-        .iter()
-        .map(|continent_cells| {
-            continent_cells
-                .iter()
-                .map(|cell_index| shoelace_area_of_cell(voronoi_diagram.cell(*cell_index)))
-                .sum::<f64>()
-        })
-        .sum();
-
-    let mut land_area_percentage: f64 = (land_area / total_area as f64) * 100.0;
-
-    println!("total area: {total_area}");
-    println!("initial land area: {land_area}");
-    println!("initial land area percentage: {land_area_percentage}");
-
-    while land_area_percentage <= ideal_land_area_percentage_lower_bound {
-        println!("total area: {total_area}");
-        println!("land area: {land_area}");
-        println!("land area precentage: {land_area_percentage}");
-        let continent_cell_set = continents.choose_mut(&mut rng);
-        match continent_cell_set {
-            Some(cell_set) => {
-                let cell_index = cell_set.iter().choose(&mut rng);
-                match cell_index {
-                    Some(index) => {
-                        println!("index: {index}");
-                        let cell = voronoi_diagram.cell(*index);
-                        let mut neighbors: Vec<usize> = cell.iter_neighbors().collect();
-                        println!("neighbors: {neighbors:?}");
-                        neighbors.shuffle(&mut rng);
-                        println!("neighbors: {neighbors:?}");
-                        println!("used_cells: {used_cells:?}");
-
-                        for neighbor in neighbors {
-                            println!("neighbor: {neighbor}");
-                            if !used_cells.contains(&neighbor) {
-                                println!("adding neighbor to continents");
-                                used_cells.insert(neighbor);
-                                println!("used_cells: {used_cells:?}");
-                                cell_set.insert(neighbor);
-                                let cell_area =
-                                    shoelace_area_of_cell(voronoi_diagram.cell(neighbor));
-                                println!("neighbor area: {cell_area}");
-                                land_area += cell_area;
-                                println!("new land area: {land_area}");
-                                land_area_percentage = (land_area / total_area as f64) * 100.0;
-                                println!("new land area percentage: {land_area_percentage}");
-                                break;
-                            }
-                        }
-                    }
-                    None => {
-                        println!("somehow we got an empty continent cell")
-                    }
-                }
-            }
-            None => {
-                println!("somehow we got an empty continent set")
-            }
-        }
-    }
 
     let noise_seed: [u8; 4] = seeder.make_seed();
     let noise_seed = u32::from_be_bytes(noise_seed);
@@ -188,7 +228,7 @@ pub fn voronoi_continents(
         let closest_index = closest_cell(&point, &voronoi_diagram);
         let closest_cell = voronoi_diagram.cell(closest_index);
 
-        if used_cells.contains(&closest_cell.site()) {
+        if continents.all_continent_cells.contains(&closest_cell.site()) {
             Tile::new(TileType::Grassland, 0.0)
         } else {
             Tile::new(TileType::Water, 0.0)
