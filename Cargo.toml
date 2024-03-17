@@ -28,6 +28,10 @@ rand_pcg = "0.3.1"
 bevy-inspector-egui = "0.23.4"
 fastnoise-lite = "1.1.1"
 bevy_fast_tilemap = "0.7.0"
+voronoice = "0.2.0"
+colorgrad = "0.6.2"
+colorous = "1.0.12"
+itertools = "0.12.1"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

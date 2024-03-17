@@ -2,5 +2,9 @@
 //pub mod wave_function_generator::*;
 mod noise_map;
 mod tile_types;
+mod voronoi;
+mod tile;
 pub use noise_map::*;
 pub use tile_types::*;
+pub use tile::*;
+pub use voronoi::*;

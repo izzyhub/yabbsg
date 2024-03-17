@@ -3,9 +3,8 @@ use rand_seeder::Seeder;
 use bevyworld_lib::map_generators::{self, TileType};
 
 use bevy::{
-    diagnostic::LogDiagnosticsPlugin,
+    core_pipeline::core_2d::Camera2dBundle, diagnostic::LogDiagnosticsPlugin,
     ecs::query::QuerySingleError, math::uvec2, prelude::*,
-    core_pipeline::core_2d::Camera2dBundle,
 };
 
 use bevy_inspector_egui::bevy_egui::{
@@ -45,6 +44,7 @@ fn main() {
 #[derive(Default, Resource)]
 struct UiState {
     seed: String,
+    voronoi_cell_count: usize,
     //map_generator: MapGeneratorStrategies,
 }
 
@@ -53,6 +53,7 @@ impl UiState {
         UiState {
             //map_generator: MapGeneratorStrategies::Voronoi,
             seed: "Initial Seed".to_string(),
+            voronoi_cell_count: 120,
         }
     }
 }
@@ -66,20 +67,20 @@ fn ui_example_system(
     //let window = egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
     let _ = egui::Window::new("Map Generation").show(contexts.ctx_mut(), |ui| {
         ui.add(egui::TextEdit::singleline(&mut ui_state.seed));
+        ui.add(egui::DragValue::new(&mut ui_state.voronoi_cell_count).speed(1));
         //println!("response {:?}", response);
         if ui.add(egui::Button::new("Regenerate Map")).clicked() {
             match maps.get_single() {
                 Ok(map_handle) => {
-                    let map_size = Vec2::splat(2560.0);
+                    let map_size = Vec2::splat(5120.0);
 
                     println!("seed: {}", ui_state.seed);
-                    let mut seeder = Seeder::from(ui_state.seed.clone());
-                    let seed: [u8; 4] = seeder.make_seed();
-                    let seed = u32::from_be_bytes(seed);
+                    let seeder = Seeder::from(ui_state.seed.clone());
 
                     let params = MapGenParams {
                         map_size,
-                        seed: seed as i32,
+                        seeder,
+                        voronoi_cell_count: ui_state.voronoi_cell_count,
                     };
 
                     match materials.get_mut(map_handle) {
@@ -105,14 +106,16 @@ fn ui_example_system(
 
 struct MapGenParams {
     map_size: Vec2,
-    seed: i32,
+    seeder: Seeder,
+    voronoi_cell_count: usize,
 }
 
-fn gen_noise_map(params: MapGenParams, map: &mut MapIndexer) {
-    let tile_matrix = Box::new(map_generators::noise_map(
+fn gen_noise_map(mut params: MapGenParams, map: &mut MapIndexer) {
+    let tile_matrix = Box::new(map_generators::voronoi_continents(
         params.map_size.x as usize,
         params.map_size.y as usize,
-        params.seed,
+        &mut params.seeder,
+        params.voronoi_cell_count,
     ));
     println!(
         "tile_matrix.shape: ({}, {})",
@@ -125,7 +128,7 @@ fn gen_noise_map(params: MapGenParams, map: &mut MapIndexer) {
             let tile_type = tile_matrix.get((x as usize, y as usize));
 
             let tile_index = match tile_type {
-                Some(tile_type) => tile_type.to_atlas_index(),
+                Some(tile_type) => tile_type.terrain().to_atlas_index(),
                 None => {
                     println!("No tile at ({}, {})", x, y);
                     TileType::Water.to_atlas_index()
@@ -135,7 +138,7 @@ fn gen_noise_map(params: MapGenParams, map: &mut MapIndexer) {
             map.set(x, y, tile_index);
         }
     }
-  println!("map generation finished");
+    println!("map generation finished");
 }
 
 fn setup(
@@ -144,22 +147,21 @@ fn setup(
     ui_state: Res<UiState>,
     mut materials: ResMut<Assets<Map>>,
 ) {
-    let map_square = 1280;
-    let map_size = Vec2::splat(2560.0);
+    let map_square = 2560;
+    let map_size = Vec2::splat(5120.0);
     let tile_size = Vec2::splat(128.0);
 
     let texture = assets.load("tiles/multitiles.png");
     //let multitile_handle: Handle<Image> = assets.load("tiles/multitiles.png");
 
-    let mut seeder = Seeder::from(ui_state.seed.clone());
-    let seed: [u8; 4] = seeder.make_seed();
-    let seed = u32::from_be_bytes(seed);
+    let seeder = Seeder::from(ui_state.seed.clone());
 
     let mut map = Map::builder(uvec2(map_square, map_square), texture, tile_size).build();
 
     let params = MapGenParams {
         map_size,
-        seed: seed as i32,
+        seeder,
+        voronoi_cell_count: ui_state.voronoi_cell_count,
     };
 
     let mut indexer = map.indexer_mut();
