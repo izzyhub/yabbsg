@@ -3,9 +3,6 @@
 use crate::map_generators::tile::Tile;
 use crate::map_generators::tile_types::TileType;
 use crate::math_helpers::*;
-use bevy::ecs::query::Has;
-//use bevy::log::tracing_subscriber::filter::targets::Iter;
-//use bevy_inspector_egui::egui::was_tooltip_open_last_frame;
 use nalgebra::DMatrix;
 use rand::prelude::*;
 use rand_pcg::Pcg64;
@@ -17,13 +14,13 @@ use std::collections::HashSet;
 
 use fastnoise_lite::*;
 
-fn closest_cell(point: &Point, diagram: &Voronoi) -> usize {
+pub fn closest_cell(point: &Point, diagram: &Voronoi) -> usize {
     let cell_count = diagram.sites().len();
     let mut closest_cell = diagram.cell(0);
     let mut min_distance = f64::MAX;
     for index in 0..cell_count {
         let cell = diagram.cell(index);
-        let cell_distance = distance(&point, cell.site_position());
+        let cell_distance = distance(point, cell.site_position());
         if cell_distance < min_distance {
             min_distance = cell_distance;
             closest_cell = cell;
@@ -33,18 +30,20 @@ fn closest_cell(point: &Point, diagram: &Voronoi) -> usize {
     closest_cell.site()
 }
 
-struct ContinentOptions {
+pub struct ContinentOptions {
     total_area: usize,
     land_area_percentage: f64,
     num_continents: usize,
+    water_padding_percentage: f64,
 }
 
 impl ContinentOptions {
-    fn new(total_area: usize, land_area_percentage: f64, num_continents: usize) -> ContinentOptions {
+    pub fn new(total_area: usize, land_area_percentage: f64, num_continents: usize, water_padding_percentage: f64) -> ContinentOptions {
         ContinentOptions {
             total_area,
             land_area_percentage,
             num_continents,
+            water_padding_percentage: (100.0 - water_padding_percentage) / 100.0,
         }
     }
 }
@@ -52,30 +51,53 @@ impl ContinentOptions {
 pub struct Continents {
     pub all_continent_cells: HashSet<usize>,
     pub continents: Vec<HashSet<usize>>,
+    pub initial_cells: HashSet<usize>,
 }
 impl Continents {
-    fn new(all_continent_cells: HashSet<usize>, continents: Vec<HashSet<usize>>) -> Continents {
+    fn new(all_continent_cells: HashSet<usize>, continents: Vec<HashSet<usize>>, initial_cells: HashSet<usize>) -> Continents {
         Continents {
             all_continent_cells,
             continents,
+            initial_cells,
         }
     }
 }
 
-fn make_continent_cells(diagram: &Voronoi, options: &ContinentOptions, rng: &mut Pcg64) -> Continents {
-        let initial_continent_cells = diagram
-        .iter_cells()
-        .map(|cell| cell.site())
-        .choose_multiple(rng, options.num_continents);
+pub fn make_continent_cells(diagram: &Voronoi, options: &ContinentOptions, rng: &mut Pcg64) -> Continents {
+    let diagram_box = diagram.bounding_box();
+    let land_box_width = options.water_padding_percentage * diagram_box.width();
+    println!("land_box_width: {land_box_width}");
+    let land_box_height = options.water_padding_percentage * diagram_box.height();
+    println!("land_box_height: {land_box_height}");
+    let land_box = BoundingBox::new(diagram_box.center().clone(), land_box_width, land_box_height);
+
+    
+    let mut initial_continent_cells: HashSet<usize> = HashSet::with_capacity(options.num_continents);
+    while initial_continent_cells.len() < options.num_continents {
+        match diagram.iter_cells().choose(rng) {
+            Some(cell) => {
+                if land_box.is_inside(cell.site_position()) {
+                    initial_continent_cells.insert(cell.site());
+                }
+                else {
+                    println!("Skipping cell in water buffer??");
+                }
+            },
+            None => {
+                println!("It's probably time to start adding result types Izzy");
+            },
+        }
+    }
+
+    let initial_cells: HashSet<usize> = initial_continent_cells.iter().copied().collect();
 
     let mut used_cells: HashSet<usize> = initial_continent_cells.into_iter().collect();
 
     let mut continents: Vec<HashSet<usize>> = used_cells
         .iter()
-        .map(|cell| HashSet::from([cell.clone()]))
+        .map(|cell| HashSet::from([*cell]))
         .collect();
 
-    // we want to iterate over the segments until we assign enough of them to be land to be roughly earth analogous
     let mut land_area: f64 = continents
         .iter()
         .map(|continent_cells| {
@@ -88,42 +110,43 @@ fn make_continent_cells(diagram: &Voronoi, options: &ContinentOptions, rng: &mut
 
     let mut land_area_percentage: f64 = (land_area / options.total_area as f64) * 100.0;
 
-    println!("total area: {}", options.total_area);
-    println!("initial land area: {land_area}");
-    println!("initial land area percentage: {land_area_percentage}");
+    //println!("total area: {}", options.total_area);
+    //println!("initial land area: {land_area}");
+    //println!("initial land area percentage: {land_area_percentage}");
 
     while land_area_percentage <= options.land_area_percentage {
-        println!("total area: {}", options.total_area);
-        println!("land area: {land_area}");
-        println!("land area precentage: {land_area_percentage}");
+        //println!("total area: {}", options.total_area);
+        //println!("land area: {land_area}");
+        //println!("land area precentage: {land_area_percentage}");
         let continent_cell_set = continents.choose_mut(rng);
         match continent_cell_set {
             Some(cell_set) => {
                 let cell_index = cell_set.iter().choose(rng);
                 match cell_index {
                     Some(index) => {
-                        println!("index: {index}");
+                        //println!("index: {index}");
                         let cell = diagram.cell(*index);
                         let mut neighbors: Vec<usize> = cell.iter_neighbors().collect();
-                        println!("neighbors: {neighbors:?}");
+                        //println!("neighbors: {neighbors:?}");
                         neighbors.shuffle(rng);
-                        println!("neighbors: {neighbors:?}");
-                        println!("used_cells: {used_cells:?}");
+                        //println!("neighbors: {neighbors:?}");
+                        //println!("used_cells: {used_cells:?}");
 
                         for neighbor in neighbors {
-                            println!("neighbor: {neighbor}");
-                            if !used_cells.contains(&neighbor) {
-                                println!("adding neighbor to continents");
+                            //println!("neighbor: {neighbor}");
+                            let neighbor_cell = diagram.cell(neighbor);
+                            if !used_cells.contains(&neighbor) && land_box.is_inside(neighbor_cell.site_position()){
+                                //println!("adding neighbor to continents");
                                 used_cells.insert(neighbor);
-                                println!("used_cells: {used_cells:?}");
+                                //println!("used_cells: {used_cells:?}");
                                 cell_set.insert(neighbor);
                                 let cell_area =
                                     shoelace_area_of_cell(diagram.cell(neighbor));
-                                println!("neighbor area: {cell_area}");
+                                //println!("neighbor area: {cell_area}");
                                 land_area += cell_area;
-                                println!("new land area: {land_area}");
+                                //println!("new land area: {land_area}");
                                 land_area_percentage = (land_area / options.total_area as f64) * 100.0;
-                                println!("new land area percentage: {land_area_percentage}");
+                                //println!("new land area percentage: {land_area_percentage}");
                                 break;
                             }
                         }
@@ -139,7 +162,7 @@ fn make_continent_cells(diagram: &Voronoi, options: &ContinentOptions, rng: &mut
         }
     }
 
-    Continents::new(used_cells, continents)
+    Continents::new(used_cells, continents, initial_cells)
 
 }
 
@@ -147,9 +170,9 @@ pub fn voronoi_continents(
     map_size_x: usize,
     map_size_y: usize,
     seeder: &mut Seeder,
-    mut cell_count: usize,
+    cell_count: usize,
 ) -> DMatrix<Tile> {
-    println!("generating continents");
+    //println!("generating continents");
     let half_x = map_size_x as f64 / 2.0;
     let half_y = map_size_y as f64 / 2.0;
     let mut rng: Pcg64 = seeder.make_rng();
@@ -163,10 +186,8 @@ pub fn voronoi_continents(
         })
         .collect();
  
-    println!("initial sites: {sites:?}");
-    println!("sites.len: {}", sites.len());
-    let copied_sites: Vec<Point> = sites.iter().map(|site| site.clone()).collect();
-
+    //println!("initial sites: {sites:?}");
+    //println!("sites.len: {}", sites.len());
     let voronoi_diagram = VoronoiBuilder::default()
         .set_sites(sites)
         .set_bounding_box(BoundingBox::new_centered(
@@ -177,49 +198,48 @@ pub fn voronoi_continents(
         .build()
         .expect("Failed to build a voronoi diagram");
 
-    println!("map_size_x: {map_size_x}");
-    println!("map_size_y: {map_size_y}");
-    let bounding_box = voronoi_diagram.bounding_box();
-    for (index, corner) in bounding_box.corners().iter().enumerate() {
-        println!("corner{index} {corner:?}");
-    }
-    for site in copied_sites {
-        println!(
-            "{site:?} inside bounding box: {}",
-            bounding_box.is_inside(&site)
-        );
-    }
-
-    println!("original cell_count: {}", cell_count);
-    cell_count = voronoi_diagram.sites().len();
-    println!("actual cell_count: {}", cell_count);
+    //println!("original cell_count: {}", cell_count);
+    //cell_count = voronoi_diagram.sites().len();
+    //println!("actual cell_count: {}", cell_count);
 
     let total_area = map_size_x * map_size_y;
     let ideal_land_area_percentage_lower_bound = 29.0;
     //let ideal_land_area_percentage_lower_bound = 2.0;
-    let num_continents: usize = rng.gen_range(4..=9);
+    //let num_continents: usize = rng.gen_range(4..=9);
+    let num_continents: usize = 8;
 
-    let options = ContinentOptions::new(total_area, ideal_land_area_percentage_lower_bound, num_continents);
+    let options = ContinentOptions::new(total_area, ideal_land_area_percentage_lower_bound, num_continents, 7.0);
     let continents = make_continent_cells(&voronoi_diagram, &options, &mut rng);
 
-    println!("generated continents");
+    //println!("generated continents");
 
 
-    let noise_seed: [u8; 4] = seeder.make_seed();
-    let noise_seed = u32::from_be_bytes(noise_seed);
+    let noise_x_seed: [u8; 4] = seeder.make_seed();
+    let noise_x_seed = u32::from_be_bytes(noise_x_seed);
 
-    let mut noise = FastNoiseLite::with_seed(noise_seed as i32);
-    noise.set_noise_type(Some(NoiseType::OpenSimplex2));
-    noise.set_fractal_type(Some(FractalType::FBm));
-    noise.set_fractal_octaves(Some(2));
+    let mut noise_x = FastNoiseLite::with_seed(noise_x_seed as i32);
+    noise_x.set_noise_type(Some(NoiseType::OpenSimplex2));
+    noise_x.set_fractal_type(Some(FractalType::FBm));
+    noise_x.set_fractal_octaves(Some(2));
+
+    let noise_y_seed: [u8; 4] = seeder.make_seed();
+    let noise_y_seed = u32::from_be_bytes(noise_y_seed);
+    let mut noise_y = FastNoiseLite::with_seed(noise_y_seed as i32);
+    noise_y.set_noise_type(Some(NoiseType::OpenSimplex2));
+    noise_y.set_fractal_type(Some(FractalType::FBm));
+    noise_y.set_fractal_octaves(Some(2));
+
 
     DMatrix::from_fn(map_size_x, map_size_y, |row, column| {
         let row_x: f64 = (row as f64) - half_x;
         let row_y: f64 = (column as f64) - half_y;
 
-        let noise_value = noise.get_noise_2d(row_x as f32, row_y as f32);
-        let point_x = row_x + (2.0 * noise_value) as f64;
-        let point_y = row_y + (2.0 * noise_value) as f64;
+        let noise_x_value = noise_x.get_noise_2d(row_x as f32, row_y as f32);
+        let noise_y_value = noise_y.get_noise_2d(row_x as f32, row_y as f32);
+        let point_x = row_x + noise_x_value as f64;
+        let point_y = row_y + noise_y_value as f64;
+        //println!("row_x: {row_x}, point_x: {point_x}");
+        //println!("row_y: {row_y}, point_y: {point_y}");
 
         let point = Point {
             x: point_x,

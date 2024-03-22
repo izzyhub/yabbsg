@@ -8,10 +8,7 @@ pub struct Tile {
 
 impl Tile {
     pub fn new(terrain: TileType, elevation: f64) -> Tile {
-        Tile {
-            terrain,
-            elevation,
-        }
+        Tile { terrain, elevation }
     }
 
     pub fn terrain(&self) -> TileType {

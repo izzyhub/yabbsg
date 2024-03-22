@@ -10,7 +10,8 @@ publish = false
 
 [lib]
 name = "bevyworld_lib"
-src = "src/lib.rs"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bevyworld"
 path = "src/main.rs"

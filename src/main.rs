@@ -147,8 +147,8 @@ fn setup(
     ui_state: Res<UiState>,
     mut materials: ResMut<Assets<Map>>,
 ) {
-    let map_square = 2560;
-    let map_size = Vec2::splat(5120.0);
+    let map_square = 2560 * 4;
+    let map_size = Vec2::splat(map_square as f32);
     let tile_size = Vec2::splat(128.0);
 
     let texture = assets.load("tiles/multitiles.png");
@@ -170,7 +170,7 @@ fn setup(
     let mut camera = Camera2dBundle::default();
     //camera.projection.scale /= 2.0;
     //camera.projection.scale *= 4.0;
-    camera.projection.scale *= 84.0;
+    camera.projection.scale *= 1932.0;
     commands.spawn(camera);
     commands.spawn(MapBundleManaged::new(map, materials.as_mut()));
     //commands.spawn(Camera2dBundle::default());

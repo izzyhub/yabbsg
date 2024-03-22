@@ -1,10 +1,10 @@
 //pub mod tile_types::*;
 //pub mod wave_function_generator::*;
 mod noise_map;
-mod tile_types;
-mod voronoi;
 mod tile;
+mod tile_types;
+mod voronoi_continents;
 pub use noise_map::*;
-pub use tile_types::*;
 pub use tile::*;
-pub use voronoi::*;
+pub use tile_types::*;
+pub use voronoi_continents::*;
