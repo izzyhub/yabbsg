@@ -1,7 +1,8 @@
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub enum TileType {
-    Grassland,
+    #[default]
     Water,
+    Grassland,
     //Coast,
     //ThickForest,
     //LightForest,
